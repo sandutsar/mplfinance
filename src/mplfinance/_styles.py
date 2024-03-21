@@ -1,11 +1,11 @@
 import matplotlib.pyplot as plt
-import matplotlib.colors as mcolors
 import copy
 import pprint
 import os.path as path
 
 from   mplfinance._arg_validators import _process_kwargs, _validate_vkwargs_dict
 from   mplfinance._styledata      import _styles
+from   mplfinance._helpers        import _mpf_is_color_like
 
 
 def _get_mpfstyle(style):
@@ -20,7 +20,14 @@ def _apply_mpfstyle(style):
 
     plt.style.use('default')
 
-    if style['base_mpl_style'] is not None:
+    if style['base_mpl_style'] == 'seaborn-darkgrid':
+        # deal with deprecation of old seaborn-darkgrid:
+        try:
+            plt.style.use('seaborn-v0_8-darkgrid')
+            style['base_mpl_style'] = 'seaborn-v0_8-darkgrid'
+        except:
+            plt.style.use(style['base_mpl_style']) 
+    elif style['base_mpl_style'] is not None:
         plt.style.use(style['base_mpl_style']) 
 
     if style['rc'] is not None:
@@ -61,54 +68,73 @@ def _apply_mpfstyle(style):
 def _valid_make_mpf_style_kwargs():
     vkwargs = {
         'base_mpf_style': { 'Default'     : None,
+                            'Description' : 'mplfinance style to use as base of new mplfinance style',
                             'Validator'   : lambda value: value in _styles.keys() },
 
         'base_mpl_style': { 'Default'     : None,
-                            'Validator'   : lambda value: isinstance(value,str) }, # and is in plt.style.available
+                            'Description' : 'matplotlib style to use as base of new mplfinance style',
+                            'Validator'   : lambda value: isinstance(value,(str,list))}, # and is in plt.style.available
 
-        'marketcolors'  : { 'Default'     : None, # 
+        'marketcolors'  : { 'Default'     : None,
+                            'Description' : 'market colors object, from `mpf.make_market_colors()`',
                             'Validator'   : lambda value: isinstance(value,dict)  },
 
         'mavcolors'     : { 'Default'     : None,
-                            'Validator'   : lambda value: isinstance(value,list) },  # TODO: all([mcolors.is_color_like(v) for v in value.values()])
+                            'Description' : 'sequence of colors to use for moving averages',
+                            'Validator'   : lambda value: isinstance(value,list) },  # TODO: all([_mpf_is_color_like(v) for v in value.values()])
+
 
         'facecolor'     : { 'Default'     : None,
+                            'Description' : 'background color for Axes',
                             'Validator'   : lambda value: isinstance(value,str) },
 
         'edgecolor'     : { 'Default'     : None,
+                            'Description' : 'edge color for Axes',
                             'Validator'   : lambda value: isinstance(value,str) },
 
         'figcolor'      : { 'Default'     : None,
+                            'Description' : 'background color for Figure.',
                             'Validator'   : lambda value: isinstance(value,str) },
 
         'gridcolor'     : { 'Default'     : None,
+                            'Description' : 'color for grid lines',
                             'Validator'   : lambda value: isinstance(value,str) },
 
         'gridstyle'     : { 'Default'     : None,
+                            'Description' : "grid line style ('-', '--', '-.', ':', '', offset, on-off-seq)."+
+                                            " (see also: https://matplotlib.org/stable/gallery/lines_bars_and_markers/linestyles.html)",
                             'Validator'   : lambda value: isinstance(value,str) },
 
         'gridaxis'      : { 'Default'     : None,
+                            'Description' : "grid lines 'vertical', 'horizontal', or 'both'",
                             'Validator'   : lambda value: value in [ 'vertical'[0:len(value)], 'horizontal'[0:len(value)], 'both'[0:len(value)] ] },
 
         'y_on_right'    : { 'Default'     : None,
+                            'Description' : 'True|False primary Axes y-ticks and labels on right.',
                             'Validator'   : lambda value: isinstance(value,bool) },
 
         'rc'            : { 'Default'     : None,
+                            'Description' : 'rcparams overrides (dict) (all other rcparams unchanged)',
                             'Validator'   : lambda value: isinstance(value,dict) },
 
         'legacy_rc'     : { 'Default'     : None,  # Just in case someone depended upon old behavior
+                            'Description' : 'rcparams to set (dict) (all other rcparams cleared)',
                             'Validator'   : lambda value: isinstance(value,dict) },
 
         'style_name'    : { 'Default'     : None,
+                            'Description' : 'name for this style; useful when calling `mpf.write_style_file(style,filename)`',
                             'Validator'   : lambda value: isinstance(value,str) },
 
     }
+
     _validate_vkwargs_dict(vkwargs)
+
     return vkwargs
+
 
 def available_styles():
     return list(_styles.keys())
-       
+
 def make_mpf_style( **kwargs ):
     config = _process_kwargs(kwargs, _valid_make_mpf_style_kwargs())
     if config['rc'] is not None and config['legacy_rc'] is not None:
@@ -153,10 +179,10 @@ def make_mpf_style( **kwargs ):
 
 def _valid_mpf_color_spec(value):
     'value must be a color, "inherit"-like, or dict of colors'
-    return ( mcolors.is_color_like(value) or 
+    return ( _mpf_is_color_like(value) or 
              ( isinstance(value,str) and value == 'inherit'[0:len(value)]) or
              ( isinstance(value,dict) and
-               all([mcolors.is_color_like(v) for v in value.values()])
+               all([_mpf_is_color_like(v) for v in value.values()])
              )
            )
 
@@ -187,50 +213,71 @@ def _valid_mpf_style(value):
             return False
     return True
 
+
 def _valid_make_marketcolors_kwargs():
     vkwargs = {
-        'up'         : { 'Default'     : None,
-                         'Validator'   : lambda value: mcolors.is_color_like(value) },
+        'up'            : { 'Default'     : None,
+                            'Description' : 'color to indicate up', 
+                            'Validator'   : lambda value: _mpf_is_color_like(value) },
 
-        'down'       : { 'Default'     : None,
-                         'Validator'   : lambda value: mcolors.is_color_like(value) },
+        'down'          : { 'Default'     : None,
+                            'Description' : 'color to indicate down', 
+                            'Validator'   : lambda value: _mpf_is_color_like(value) },
 
-        'hollow'     : { 'Default'     : None,
-                         'Validator'   : lambda value: mcolors.is_color_like(value) },
+        'hollow'        : { 'Default'     : None,
+                            'Description' : "color for hollow candles (for `type=hollow`)",
+                            'Validator'   : lambda value: _mpf_is_color_like(value) },
 
-        'alpha'      : { 'Default'     : None,
-                         'Validator'   : lambda value: ( isinstance(value,float) and
-                                                         0.0 <= value and 1.0 >= value ) },
+        'alpha'         : { 'Default'     : None,
+                            'Description' : 'opacity 0.0 (transparent) to 1.0 (opaque);'+
+                                            ' applies to candles,renko,pnf (but not ohlc bars)',
+                            'Validator'   : lambda value: (isinstance(value,float)
+                                                           and 0.0 <= value and 1.0 >= value ) },
 
-        'edge'       : { 'Default'     : None,
-                         'Validator'   : lambda value: _valid_mpf_color_spec(value) },
+        'edge'          : { 'Default'     : None,
+                            'Description' : 'color of candle edge; may also be "i" or "inherit"'+
+                                            ' to take color from base_mpf_style',
+                            'Validator'   : lambda value: _valid_mpf_color_spec(value) },
 
-        'wick'       : { 'Default'     : None,
-                         'Validator'   : lambda value: isinstance(value,dict)
-                                                       or isinstance(value,str) 
-                                                       or mcolors.is_color_like(value) },
+        'wick'          : { 'Default'     : None,
+                            'Description' : "color of candle wick; may be single color,"+
+                                            " or may be dict with keys 'up' and 'down'",
+                            'Validator'   : lambda value: isinstance(value,dict)
+                                                          or isinstance(value,str)
+                                                          or _mpf_is_color_like(value) },
 
-        'ohlc'       : { 'Default'     : None,
-                         'Validator'   : lambda value: isinstance(value,dict)
-                                                       or isinstance(value,str) 
-                                                       or mcolors.is_color_like(value) },
+        'ohlc'          : { 'Default'     : None,
+			    'Description' : "color of ohlc bars; may be single color,"+
+					    " or may be dict with keys 'up' and 'down'",
+                            'Validator'   : lambda value: isinstance(value,dict)
+                                                          or isinstance(value,str)
+                                                          or _mpf_is_color_like(value) },
 
-        'volume'     : { 'Default'   : None,
-                         'Validator'   : lambda value: isinstance(value,dict)
-                                                       or isinstance(value,str) 
-                                                       or mcolors.is_color_like(value) },
+        'volume'        : { 'Default'   : None,
+			    'Description' : "color of volume bars; may be single color,"+
+					    " or may be dict with keys 'up' and 'down'",
+                            'Validator'   : lambda value: isinstance(value,dict)
+                                                          or isinstance(value,str)
+                                                          or _mpf_is_color_like(value) },
 
-        'vcdopcod'   : { 'Default'     : False,
-                         'Validator'   : lambda value: isinstance(value,bool) },
+        'vcdopcod'      : { 'Default'     : False,
+                            'Description' : 'True/False volume color depends on price change from previous day',
+                            'Validator'   : lambda value: isinstance(value,bool) },
 
-        'inherit'    : { 'Default'     : False,
-                         'Validator'   : lambda value: isinstance(value,bool) },
+
+        'inherit'       : { 'Default'     : False,
+                            'Description' : 'inherit color from base_mpf_style for: edge,volume,ohlc,wick',
+                            'Validator'   : lambda value: isinstance(value,bool) },
 
         'base_mpf_style': { 'Default'     : None,
+                            'Description' : 'mplfinance style market colors as basis for new market colors object',
                             'Validator'   : lambda value: isinstance(value,str) },
     }
+
     _validate_vkwargs_dict(vkwargs)
+
     return vkwargs
+
 
 def make_marketcolors(**kwargs):
     '''
@@ -282,7 +329,7 @@ def make_marketcolors(**kwargs):
         else:
             colors = dict(up=value, down=value)
         for updown in ['up','down']:
-            if not mcolors.is_color_like(colors[updown]):
+            if not _mpf_is_color_like(colors[updown]):
                 err = f'NOT is_color_like() for {key}[\'{updown}\'] = {colors[updown]}'
                 raise ValueError(err)
         return colors

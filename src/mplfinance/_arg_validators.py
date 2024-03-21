@@ -2,9 +2,11 @@ import matplotlib.dates  as mdates
 import pandas   as pd
 import numpy    as np
 import datetime
-from   mplfinance._helpers import _list_of_dict
+from   mplfinance._helpers import _list_of_dict, _mpf_is_color_like
+from   mplfinance._helpers import _num_or_seq_of_num
 import matplotlib as mpl
 import warnings
+
 
 def _check_and_prepare_data(data, config):
     '''
@@ -29,6 +31,53 @@ def _check_and_prepare_data(data, config):
     if not isinstance(data.index,pd.core.indexes.datetimes.DatetimeIndex):
         raise TypeError('Expect data.index as DatetimeIndex')
 
+    # We will not be fully case-insensitive (since Pandas columns as NOT case-insensitive)
+    # but because so many people have requested it, for the default column names we will
+    # try both Capitalized and lower case:
+    columns = config['columns']
+    if columns is None:
+        columns =  ('Open', 'High', 'Low', 'Close', 'Volume')
+        if all([c.lower() in data for c in columns[0:4]]):
+            columns =  ('open', 'high', 'low', 'close', 'volume')
+        
+    o, h, l, c, v = columns
+    cols = [o, h, l, c]
+
+    if config['volume'] != False:
+        expect_cols = columns
+    else:
+        expect_cols = cols
+     
+    for col in expect_cols:
+        if col not in data.columns:
+            for dc in data.columns:
+                if dc.strip() != dc:
+                    warnings.warn('\n ================================================================= '+
+                                  '\n   Input DataFrame column name "'+dc+'" '+
+                                  '\n   contains leading and/or trailing whitespace.',category=UserWarning)
+            raise ValueError('Column "'+col+'" NOT FOUND in Input DataFrame!'+
+                             '\n            CHECK that your column names are correct AND/OR'+
+                             '\n            CHECK for leading or trailing blanks in your column names.')
+
+    opens   = data[o].values
+    highs   = data[h].values
+    lows    = data[l].values
+    closes  = data[c].values
+    if v in data.columns:
+        volumes = data[v].values
+        cols.append(v)
+    else:
+        volumes = None
+
+    for col in cols:
+        if not all( isinstance(v,(float,int)) for v in data[col] ):
+            raise ValueError('Data for column "'+str(col)+'" must be ALL float or int.')
+
+    if config['tz_localize']:
+        dates   = mdates.date2num(data.index.tz_localize(None).to_pydatetime())
+    else:  # Just in case someone was depending on this bug (Issue 236)
+        dates   = mdates.date2num(data.index.to_pydatetime())
+
     if (len(data.index) > config['warn_too_much_data'] and
         (config['type']=='candle' or config['type']=='ohlc' or config['type']=='hollow_and_filled')
        ):
@@ -44,37 +93,20 @@ def _check_and_prepare_data(data, config):
                       '\n\n ================================================================ ',
                   category=UserWarning)
 
-    # We will not be fully case-insensitive (since Pandas columns as NOT case-insensitive)
-    # but because so many people have requested it, for the default column names we will
-    # try both Capitalized and lower case:
-    columns = config['columns']
-    if columns is None:
-        columns =  ('Open', 'High', 'Low', 'Close', 'Volume')
-        if all([c.lower() in data for c in columns[0:4]]):
-            columns =  ('open', 'high', 'low', 'close', 'volume')
-        
-    o, h, l, c, v = columns
-    cols = [o, h, l, c]
-
-    if config['tz_localize']:
-        dates   = mdates.date2num(data.index.tz_localize(None).to_pydatetime())
-    else:  # Just in case someone was depending on this bug (Issue 236)
-        dates   = mdates.date2num(data.index.to_pydatetime())
-    opens   = data[o].values
-    highs   = data[h].values
-    lows    = data[l].values
-    closes  = data[c].values
-    if v in data.columns:
-        volumes = data[v].values
-        cols.append(v)
-    else:
-        volumes = None
-
-    for col in cols:
-        if not all( isinstance(v,(float,int)) for v in data[col] ):
-            raise ValueError('Data for column "'+str(col)+'" must be ALL float or int.')
-
     return dates, opens, highs, lows, closes, volumes
+
+
+def _label_validator(label_value):
+    ''' Validates the input of [legend] label for added plots.
+    label_value may be a str or a sequence of str.
+    '''
+    if isinstance(label_value,str):
+        return True
+    if isinstance(label_value,(list,tuple,np.ndarray)):
+        if all([isinstance(v,str) for v in label_value]):
+            return True
+    return False
+
 
 def _get_valid_plot_types(plottype=None):
 
@@ -93,13 +125,9 @@ def _get_valid_plot_types(plottype=None):
 
     if plottype is None:
         return _valid_types_all
-
-    if plottype not in _valid_types_all:
-        return None
     elif plottype in _alias_types:
         return _alias_types[plottype]
-    else:
-        return plottype
+    return plottype
         
 
 def _mav_validator(mav_value):
@@ -274,13 +302,20 @@ def _kwarg_not_implemented(value):
     raise NotImplementedError('kwarg NOT implemented.')
 
 def _validate_vkwargs_dict(vkwargs):
-    # Check that we didn't make a typo in any of the things
-    # that should be the same for all vkwargs dict items:
+    """
+    Check that we didn't make a typo in any of the things
+    that should be the same for all vkwargs dict items:
+
+    {kwarg : {'Default': ... , 'Description': ... , 'Validator': ...} }
+    """
     for key, value in vkwargs.items():
-        if len(value) != 2:
-            raise ValueError('Items != 2 in valid kwarg table, for kwarg "'+key+'"')
+        # has been changed to 3 to support descriptions
+        if len(value) != 3:
+            raise ValueError('Items != 3 in valid kwarg table, for kwarg "'+key+'"')
         if 'Default' not in value:
             raise ValueError('Missing "Default" value for kwarg "'+key+'"')
+        if 'Description' not in value:
+            raise ValueError('Missing "Description" value for kwarg "'+key+'"')
         if 'Validator' not in value:
             raise ValueError('Missing "Validator" function for kwarg "'+key+'"')
 
@@ -359,6 +394,25 @@ def _yscale_validator(value):
     return True
 
 
+def _is_marketcolor_object(obj):
+    if not isinstance(obj,dict): return False
+    market_colors_keys = ('candle','edge','wick','ohlc')
+    return all([k in obj for k in market_colors_keys])
+
+
+def _mco_validator(value):        # marketcolor overrides validator
+    if isinstance(value,dict):    # not yet supported, but maybe we will have other
+        if 'colors' not in value: # kwargs related to mktcolor overrides (ex: `mco_faceonly`)
+            raise ValueError('`marketcolor_overrides` as dict must contain `colors` key.')
+        colors = value['colors']
+    else:
+        colors = value
+    if not isinstance(colors,(list,tuple,np.ndarray)):
+        return False
+    return all([(c is None or 
+                 _mpf_is_color_like(c) or
+                 _is_marketcolor_object(c) ) for c in colors])
+
 def _check_for_external_axes(config):
     '''
     Check that all `fig` and `ax` kwargs are either ALL None, 
@@ -408,3 +462,15 @@ def _check_for_external_axes(config):
     
     external_axes_mode = True if isinstance(config['ax'],mpl.axes.Axes) else False
     return external_axes_mode
+
+def _valid_fb_dict(value):
+    return (isinstance(value,dict) and
+            'y1' in value and
+            _num_or_seq_of_num(value['y1']))
+
+def _fill_between_validator(value):
+    if _num_or_seq_of_num(value): return True
+    if _valid_fb_dict(value): return True
+    if _list_of_dict(value):
+        return all([_valid_fb_dict(v) for v in value])
+    return False

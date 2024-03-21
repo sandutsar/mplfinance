@@ -29,59 +29,94 @@ def _get_widths_df():
 
 _widths = _get_widths_df()
 
+
 def _valid_scale_width_kwargs():
     vkwargs = {
         'ohlc'             : { 'Default'     : None,
+                               'Description' : 'length of horizontal open/close tickmarks on ohlc bars',
                                'Validator'   : lambda value: isinstance(value,(float,int)) },
 
         'volume'           : { 'Default'     : None,
+                               'Description' : 'width of volume bars',
                                'Validator'   : lambda value: isinstance(value,(float,int)) },
 
         'candle'           : { 'Default'     : None,
+                               'Description' : 'width of candles',
                                'Validator'   : lambda value: isinstance(value,(float,int)) },
 
         'lines'            : { 'Default'     : None,
+                               'Description' : 'width of lines (for line plots and moving averages)',
                                'Validator'   : lambda value: isinstance(value,(float,int)) },
 
         'volume_linewidth' : { 'Default'     : None,
+                               'Description' : 'width of edges of volume bars',
                                'Validator'   : lambda value: isinstance(value,(float,int)) },
 
         'ohlc_linewidth'   : { 'Default'     : None,
+                               'Description' : 'width (thickness) of ohlc bars',
                                'Validator'   : lambda value: isinstance(value,(float,int)) },
 
         'candle_linewidth' : { 'Default'     : None,
+                               'Description' : 'width of candle edges and wicks',
                                'Validator'   : lambda value: isinstance(value,(float,int)) },
     }
+
     _validate_vkwargs_dict(vkwargs)
+
     return vkwargs
+
 
 def _valid_update_width_kwargs():
     vkwargs = {
 
         'ohlc_ticksize'    : { 'Default'     : None,
+                               'Description' : 'length of horizontal open/close tickmarks on ohlc bars',
                                'Validator'   : lambda value: isinstance(value,(float,int)) },
 
         'ohlc_linewidth'   : { 'Default'     : None,
+                               'Description' : 'width (thickness) of ohlc bars',
                                'Validator'   : lambda value: isinstance(value,(float,int)) },
 
         'volume_width'     : { 'Default'     : None,
+                               'Description' : 'width of volume bars',
                                'Validator'   : lambda value: isinstance(value,(float,int)) },
 
         'volume_linewidth' : { 'Default'     : None,
+                               'Description' : 'width of edges of volume bars',
                                'Validator'   : lambda value: isinstance(value,(float,int)) },
 
         'candle_width'     : { 'Default'     : None,
+                               'Description' : 'width of candles',
                                'Validator'   : lambda value: isinstance(value,(float,int)) },
 
         'candle_linewidth' : { 'Default'     : None,
+                               'Description' : 'width of candle edges and wicks',
                                'Validator'   : lambda value: isinstance(value,(float,int)) },
 
         'line_width'       : { 'Default'     : None,
+                               'Description' : 'width of lines (for line plots and moving averages)',
                                'Validator'   : lambda value: isinstance(value,(float,int)) },
     }
+
     _validate_vkwargs_dict(vkwargs)
+
     return vkwargs
 
+def _scale_width_config(scale,width_config):
+    if scale['volume'] is not None:
+        width_config['volume_width']  *= scale['volume']
+    if scale['ohlc'] is not None:
+        width_config['ohlc_ticksize'] *= scale['ohlc']
+    if scale['candle'] is not None:
+        width_config['candle_width']  *= scale['candle']
+    if scale['lines'] is not None:
+        width_config['line_width']    *= scale['lines']
+    if scale['volume_linewidth'] is not None:
+        width_config['volume_linewidth']  *= scale['volume_linewidth']
+    if scale['ohlc_linewidth'] is not None: 
+        width_config['ohlc_linewidth'  ]  *= scale['ohlc_linewidth']
+    if scale['candle_linewidth'] is not None:
+        width_config['candle_linewidth']  *= scale['candle_linewidth']
 
 def _determine_width_config( xdates, config ):
     '''
@@ -118,23 +153,13 @@ def _determine_width_config( xdates, config ):
         width_config['candle_linewidth'] = _dfinterpolate(_widths,datalen,'clw')
         width_config['line_width'      ] = _dfinterpolate(_widths,datalen,'lw')
 
-    if config['scale_width_adjustment'] is not None:
+    if 'scale_width_adjustment' in config['style']: 
+        scale = _process_kwargs(config['style']['scale_width_adjustment'],_valid_scale_width_kwargs())
+        _scale_width_config(scale,width_config)
 
+    if config['scale_width_adjustment'] is not None:
         scale = _process_kwargs(config['scale_width_adjustment'],_valid_scale_width_kwargs())
-        if scale['volume'] is not None:
-            width_config['volume_width']  *= scale['volume']
-        if scale['ohlc'] is not None:
-            width_config['ohlc_ticksize'] *= scale['ohlc']
-        if scale['candle'] is not None:
-            width_config['candle_width']  *= scale['candle']
-        if scale['lines'] is not None:
-            width_config['line_width']    *= scale['lines']
-        if scale['volume_linewidth'] is not None:
-            width_config['volume_linewidth']  *= scale['volume_linewidth']
-        if scale['ohlc_linewidth'] is not None: 
-            width_config['ohlc_linewidth'  ]  *= scale['ohlc_linewidth']
-        if scale['candle_linewidth'] is not None:
-            width_config['candle_linewidth']  *= scale['candle_linewidth']
+        _scale_width_config(scale,width_config)
 
     if config['update_width_config'] is not None:
      

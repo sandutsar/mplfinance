@@ -22,16 +22,16 @@ def _build_panels( figure, config ):
     ------
     The following items are used from `config`:
 
-    num_panels   : integer (0-9) or None
+    num_panels   : integer (0-31) or None
         number of panels to create
 
     addplot      : dict or None
         value for the `addplot=` kwarg passed into `mplfinance.plot()`
 
-    volume_panel : integer (0-9) or None
+    volume_panel : integer (0-31) or None
         panel id (0-number_of_panels)
 
-    main_panel   : integer (0-9) or None
+    main_panel   : integer (0-31) or None
         panel id (0-number_of_panels)
 
     panel_ratios : sequence or None
@@ -68,7 +68,7 @@ Returns
     panel_ratios = config['panel_ratios']
 
     if not _valid_panel_id(main_panel):
-        raise ValueError('main_panel id must be integer 0 to 9, but is '+str(main_panel))
+        raise ValueError('main_panel id must be integer 0 to 31, but is '+str(main_panel))
 
     if num_panels is None:  # then infer the number of panels:
         pset = {0} # start with a set including only panel zero
@@ -85,12 +85,12 @@ Returns
                 if panel in backwards_panel_compatibility:
                     panel = backwards_panel_compatibility[panel]
                 if not _valid_panel_id(panel):
-                    raise ValueError('addplot panel must be integer 0 to 9, but is "'+str(panel)+'"')
+                    raise ValueError('addplot panel must be integer 0 to 31, but is "'+str(panel)+'"')
                 pset.add(panel)
 
         if volume is True:
             if not _valid_panel_id(volume_panel):
-                raise ValueError('volume_panel must be integer 0 to 9, but is "'+str(volume_panel)+'"')
+                raise ValueError('volume_panel must be integer 0 to 31, but is "'+str(volume_panel)+'"')
             pset.add(volume_panel)
 
         pset.add(main_panel)
@@ -218,15 +218,22 @@ Returns
     return panels
     
 
-def _set_ticks_on_bottom_panel_only(panels,formatter,rotation=45):
+def _set_ticks_on_bottom_panel_only(panels,formatter,rotation=45,xlabel=None):
 
     bot = panels.index.values[-1]
     ax  = panels.at[bot,'axes'][0]
     ax.tick_params(axis='x',rotation=rotation)
     ax.xaxis.set_major_formatter(formatter)
 
+    if xlabel is not None:
+        ax.set_xlabel(xlabel)
+
     if len(panels) == 1: return
 
+    # [::-1] reverses the order of the panel id's
+    # [1:] all but the first element, which, since the array
+    #      is reversed, means we take all but the LAST panel id.
+    # Thus, only the last (bottom) panel id gets tick labels:
     for panid in panels.index.values[::-1][1:]:
         panels.at[panid,'axes'][0].tick_params(axis='x',labelbottom=False)
 
